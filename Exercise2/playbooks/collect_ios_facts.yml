@@ -1,0 +1,47 @@
+---
+- name: Collect IOS facts from devices. Save them to YAML files and create a CSV report.
+  hosts: cisco_devices
+  connection: local
+  vars:
+    cli:
+      host: "{{ inventory_hostname }}"
+      username: "{{ ansible_user }}"
+      password: "{{ ansible_password }}"
+  tasks:
+  - name: get ios facts from device
+    ios_facts:
+      provider: "{{cli}}"
+      gather_subset:
+        - hardware
+        - default
+    register: ios_facts_out
+
+  - name: Dir clean-up
+    file: path=./ios_facts_files/ state=absent
+    run_once: true
+
+  - name: Dir creation
+    file: path=./ios_facts_files/ state=directory
+    run_once: true
+
+  - name: CSV Report clean-up
+    file: path=./report.csv state=absent
+    run_once: true
+
+  - name: CSV Report creation
+    file: path=./report.csv state=touch
+    run_once: true
+
+  - name: copy ios facts files
+    copy:
+      content="{{ios_facts_out|to_nice_yaml(indent=4)}}"
+      dest=./ios_facts_files/{{inventory_hostname}}_iosfacts.yml
+
+  - name: add info to CSV inventory report
+    lineinfile:
+      dest: "./report.csv"
+      regexp: "{{ inventory_hostname }}"
+      line: |
+        {{'%s|%s|%s|%s|%s|%s'|format(inventory_hostname,ios_facts_out.ansible_facts.ansible_net_hostname,
+        ios_facts_out.ansible_facts.ansible_net_image,ios_facts_out.ansible_facts.ansible_net_model,
+        ios_facts_out.ansible_facts.ansible_net_serialnum,ios_facts_out.ansible_facts.ansible_net_version)}}
